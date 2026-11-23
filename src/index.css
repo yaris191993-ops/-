@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", "IBM Plex Sans Thai", ui-monospace, SFMono-Regular, monospace;
+  --color-cream: #f8f9fc;
+  --color-cream-2: #ffffff;
+  --color-sand: #dce3f0;
+  --color-ink: #132d63;
+  --color-ink-2: #1e469e;
+  --color-moss: #2563eb;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  @page {
+    margin: 8mm;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+  }
+}

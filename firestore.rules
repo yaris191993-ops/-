@@ -1,0 +1,315 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core helper primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string
+        && id.size() >= 1
+        && id.size() <= 128
+        && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidHex64(val) {
+      return val is string
+        && val.size() == 64
+        && val.matches('^[a-f0-9]{64}$');
+    }
+
+    function isValidEmailId(email) {
+      return email is string
+        && email.size() >= 5
+        && email.size() <= 160
+        && email.matches('^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]{2,}$');
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && (
+          request.auth.token.email.lower() == 'yaris191993@gmail.com'
+          || exists(/databases/$(database)/documents/staffAdmins/$(request.auth.token.email.lower()))
+        );
+    }
+
+    function isValidChannelCounter(channel, counter) {
+      return counter is int && (
+        (channel == 'general' && counter >= 1 && counter <= 3) ||
+        (channel == 'foreign' && counter >= 1 && counter <= 5)
+      );
+    }
+
+    function isValidServiceChannel(serviceId, channel) {
+      return (
+        (serviceId == 'foreign' && channel == 'foreign') ||
+        (serviceId in ['domestic', 'unemployment', 'overseas', 'guidance'] && channel == 'general')
+      );
+    }
+
+    function isValidQueue(data) {
+      return data.keys().hasAll([
+          'bookingCode',
+          'queueNo',
+          'serviceId',
+          'serviceTitle',
+          'channel',
+          'counter',
+          'date',
+          'slotId',
+          'issuedTime',
+          'source',
+          'status',
+          'lookupHash',
+          'identityHash',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingCode',
+          'queueNo',
+          'serviceId',
+          'serviceTitle',
+          'channel',
+          'counter',
+          'date',
+          'slotId',
+          'issuedTime',
+          'source',
+          'status',
+          'lookupHash',
+          'identityHash',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.bookingCode is string
+        && data.bookingCode.size() >= 4
+        && data.bookingCode.size() <= 16
+        && data.bookingCode.matches('^PN-[0-9]{4,10}$')
+        && data.queueNo is string
+        && data.queueNo.size() >= 3
+        && data.queueNo.size() <= 12
+        && data.queueNo.matches('^[A-E]-[0-9]{3,5}$')
+        && data.serviceId is string
+        && data.serviceId in ['domestic', 'unemployment', 'foreign', 'overseas', 'guidance']
+        && data.serviceTitle is string
+        && data.serviceTitle.size() >= 1
+        && data.serviceTitle.size() <= 120
+        && data.channel is string
+        && data.channel in ['general', 'foreign']
+        && isValidServiceChannel(data.serviceId, data.channel)
+        && isValidChannelCounter(data.channel, data.counter)
+        && data.date is string
+        && data.date.size() == 10
+        && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.slotId is string
+        && data.slotId.size() >= 4
+        && data.slotId.size() <= 16
+        && data.slotId.matches('^([0-9]{4}|[0-9]{4}-kiosk)$')
+        && data.issuedTime is string
+        && data.issuedTime.size() <= 5
+        && data.source is string
+        && data.source in ['online', 'kiosk']
+        && data.status is string
+        && data.status in ['waiting', 'called', 'done', 'no_show', 'cancelled']
+        && isValidHex64(data.lookupHash)
+        && isValidHex64(data.identityHash)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidQueueDetail(data) {
+      return data.keys().hasAll([
+          'queueId',
+          'date',
+          'bookingCode',
+          'fullName',
+          'idNumber',
+          'phone',
+          'note',
+          'lookupHash',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'queueId',
+          'date',
+          'bookingCode',
+          'fullName',
+          'idNumber',
+          'phone',
+          'note',
+          'lookupHash',
+          'createdAt'
+        ])
+        && data.queueId is string
+        && isValidId(data.queueId)
+        && data.date is string
+        && data.date.size() == 10
+        && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.bookingCode is string
+        && data.bookingCode.size() >= 4
+        && data.bookingCode.size() <= 16
+        && data.bookingCode.matches('^PN-[0-9]{4,10}$')
+        && data.fullName is string
+        && data.fullName.size() >= 1
+        && data.fullName.size() <= 120
+        && data.idNumber is string
+        && data.idNumber.size() >= 1
+        && data.idNumber.size() <= 32
+        && data.phone is string
+        && data.phone.size() >= 1
+        && data.phone.size() <= 24
+        && data.note is string
+        && data.note.size() <= 500
+        && isValidHex64(data.lookupHash)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidQueueLookup(data) {
+      return data.keys().hasAll(['queueId', 'bookingCode', 'createdAt'])
+        && data.keys().hasOnly(['queueId', 'bookingCode', 'createdAt'])
+        && isValidId(data.queueId)
+        && data.bookingCode is string
+        && data.bookingCode.size() >= 4
+        && data.bookingCode.size() <= 16
+        && data.bookingCode.matches('^PN-[0-9]{4,10}$')
+        && data.createdAt is timestamp;
+    }
+
+    function isValidStaffAdmin(data) {
+      return data.keys().hasAll(['email', 'displayName', 'addedBy', 'createdAt'])
+        && data.keys().hasOnly(['email', 'displayName', 'addedBy', 'createdAt'])
+        && isValidEmailId(data.email)
+        && data.displayName is string
+        && data.displayName.size() <= 120
+        && data.addedBy is string
+        && data.addedBy.size() >= 5
+        && data.addedBy.size() <= 160
+        && data.createdAt is timestamp;
+    }
+
+    // Public zero-PII queue board & booking slots (queried strictly by date)
+    match /queues/{queueId} {
+      allow get: if isValidId(queueId);
+      allow list: if resource.data.date >= '2020-01-01' && request.query.limit <= 300;
+
+      allow create: if isValidId(queueId)
+        && isValidQueue(incoming())
+        && incoming().status == 'waiting'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/queueDetails/$(queueId));
+
+      allow update: if isValidId(queueId)
+        && isValidQueue(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().bookingCode == existing().bookingCode
+        && incoming().serviceId == existing().serviceId
+        && incoming().channel == existing().channel
+        && incoming().source == existing().source
+        && incoming().lookupHash == existing().lookupHash
+        && (
+          (isAdmin() && incoming().identityHash == existing().identityHash && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'counter', 'updatedAt'])) ||
+          (
+            existing().status == 'waiting' && (
+              (incoming().status == 'waiting'
+                && incoming().counter == existing().counter
+                && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'slotId', 'queueNo', 'identityHash', 'updatedAt'])) ||
+              (incoming().status == 'cancelled'
+                && incoming().identityHash == existing().identityHash
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+            )
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(queueId);
+    }
+
+    // Restricted PII companion collection (admins only)
+    match /queueDetails/{queueId} {
+      allow get: if isValidId(queueId) && isAdmin();
+      allow list: if isAdmin() && resource.data.date >= '2020-01-01';
+
+      allow create: if isValidId(queueId)
+        && isValidQueueDetail(incoming())
+        && incoming().queueId == queueId
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/queues/$(queueId));
+
+      allow update: if isValidId(queueId)
+        && isAdmin()
+        && isValidQueueDetail(incoming())
+        && incoming().queueId == existing().queueId
+        && incoming().date == existing().date
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['note']);
+
+      allow delete: if isAdmin() && isValidId(queueId);
+    }
+
+    // Point-lookup index keyed by SHA-256(bookingCode:idNumber)
+    match /queueLookups/{lookupHash} {
+      allow get: if isValidHex64(lookupHash);
+      allow list: if false;
+
+      allow create: if isValidHex64(lookupHash)
+        && isValidQueueLookup(incoming())
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/queues/$(incoming().queueId));
+
+      allow update: if false;
+      allow delete: if isAdmin() && isValidHex64(lookupHash);
+    }
+
+    // Staff admin allowlist
+    match /staffAdmins/{email} {
+      allow get: if isValidEmailId(email)
+        && isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && (request.auth.token.email.lower() == email || isAdmin());
+      allow list: if isAdmin() && resource.data.email >= '';
+
+      allow create: if isValidEmailId(email)
+        && isAdmin()
+        && isValidStaffAdmin(incoming())
+        && incoming().email == email
+        && incoming().addedBy == request.auth.token.email.lower()
+        && incoming().createdAt == request.time;
+
+      allow update: if isValidEmailId(email)
+        && isAdmin()
+        && isValidStaffAdmin(incoming())
+        && incoming().email == existing().email
+        && incoming().addedBy == existing().addedBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName']);
+
+      allow delete: if isValidEmailId(email) && isAdmin();
+    }
+
+    // Startup connection check document
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, write: if false;
+    }
+  }
+}
